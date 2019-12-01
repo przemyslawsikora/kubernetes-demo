@@ -1,0 +1,124 @@
+---
+- name: Docker and Kubernetes Installation
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install Docker
+      import_role:
+        name: geerlingguy.docker
+      vars:
+        docker_package: "docker-ce-18.09.9"
+
+    - name: Add admin user to docker group
+      user:
+        name: admin
+        group: docker
+
+    - name: Remove swapfile from /etc/fstab
+      mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
+
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Disable SELinux
+      command: setenforce 0
+
+    - name: Disable SELinux on reboot
+      selinux:
+        state: disabled
+
+    - name: Ensure net.bridge.bridge-nf-call-ip6tables is set to 1
+      sysctl:
+        name: net.bridge.bridge-nf-call-ip6tables
+        value: "1"
+        state: present
+
+    - name: Ensure net.bridge.bridge-nf-call-iptables is set to 1
+      sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: "1"
+        state: present
+
+    - name: Add Kubernetes' YUM repository
+      yum_repository:
+        name: Kubernetes
+        description: Kubernetes YUM repository
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+        gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        gpgcheck: yes
+
+    - name: Install kubeadm
+      yum:
+        name: kubeadm
+        state: present
+        update_cache: yes
+
+- name: Kubelet Installation
+  hosts: workers
+  become: yes
+  tasks:
+    - name: Install kubelet
+      yum:
+        name: kubelet
+        state: present
+        update_cache: yes
+
+    - name: Start kubelet
+      service:
+        name: kubelet
+        enabled: yes
+        state: started
+
+- name: Master Initialization
+  hosts: master
+  tasks:
+    - name: Install kubectl
+      yum:
+        name: kubectl
+        state: present
+        update_cache: yes
+
+    - name: Initialize the Kubernetes cluster using kubeadm
+      become: yes
+      command: kubeadm init --pod-network-cidr=172.16.0.0/16 --apiserver-advertise-address=192.168.33.101
+
+    - name: Create .kube directory
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    - name: Copy admin.conf to user's kube config
+      become: yes
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/admin/.kube/config
+        remote_src: yes
+        owner: admin
+
+    - name: Install Pod network
+      shell: kubectl create -f https://docs.projectcalico.org/v3.10/manifests/calico.yaml
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+
+    - name: Copy join command to local file
+      local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+
+- name: Workers Initialization
+  hosts: workers
+  tasks:
+    - name: Copy the join command to server location
+      copy: src=join-command dest=/tmp/join-command.sh mode=0777
+
+    - name: Join the node to cluster
+      become: yes
+      command: sh /tmp/join-command.sh
