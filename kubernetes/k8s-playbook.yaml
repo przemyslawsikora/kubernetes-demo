@@ -1,0 +1,6 @@
+---
+- import_playbook: docker-installation.yaml
+- import_playbook: initialization.yaml
+- import_playbook: kubernetes-installation.yaml
+- import_playbook: master-initialization.yaml
+- import_playbook: worker-initialization.yaml

@@ -36,19 +36,19 @@ To install Kubernetes follow these steps:
    sudo yum install -y epel-release
    sudo yum install -y ansible
    ```
-3. Copy the application from the <code>app</code> directory into remote machine.  
+3. Copy the Kubernetes setup from the <code>kubernetes</code> directory into remote machine and enter there.  
 4. Install Ansible requirements
    ```bash
    ansible-galaxy install -r ansible-requirements.yml
    ```
 5. Run installer:
    ```bash
-   ansible-playbook -i production.ini k8s-playbook.yml --ask-become-pass
+   ansible-playbook -i production.ini k8s-playbook.yaml --ask-become-pass
    ```
 6. Install Kubernetes dashboard:
    ```bash
-   kubectl apply -f dashboard-adminuser.yml
-   kubectl apply -f admin-role-binding.yml
+   kubectl apply -f manifests/dashboard-adminuser.yml
+   kubectl apply -f manifests/admin-role-binding.yml
    kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta6/aio/deploy/recommended.yaml
    ```
    Get and save token that will be used to login to UI later:

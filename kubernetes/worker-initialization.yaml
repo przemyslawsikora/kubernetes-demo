@@ -1,0 +1,46 @@
+---
+- name: Configuration file copying
+  hosts: master
+  tasks:
+    - name: Copy admin.conf to tmp directory
+      become: yes
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /tmp/admin.conf
+        remote_src: yes
+        owner: admin
+        group: admin
+
+- name: Set admin.conf into worker nodes
+  hosts: workers
+  tasks:
+    - name: Create .kube directory
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    - name: Copy admin.conf to user's kube config
+      become: yes
+      copy:
+        src: /tmp/admin.conf
+        dest: /home/admin/.kube/config
+        owner: admin
+
+- name: Deletion of temporary configuration file
+  hosts: master
+  tasks:
+    - name: Remove admin.conf from tmp directory
+      file:
+        path: /tmp/admin.conf
+        state: absent
+
+- name: Joining workers to the cluster
+  hosts: workers
+  tasks:
+    - name: Copy the join command to server location
+      copy: src=join-command dest=/tmp/join-command.sh mode=0777
+
+    - name: Join the node to cluster
+      become: yes
+      command: sh /tmp/join-command.sh
